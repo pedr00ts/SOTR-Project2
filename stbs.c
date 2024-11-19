@@ -21,7 +21,7 @@ int STBS_Init(STBS *scheduler, uint32_t tick_ms, uint8_t max_tasks) {
     scheduler->running = false;
 
     if (scheduler->task_list == NULL) {
-        printk("Failed to allocate memory for tasks\n");
+        LOG_ERR("Failed to allocate memory for tasks\n");
         return -1;  // Indicate failure
     }
 
@@ -38,12 +38,7 @@ int STBS_Start(STBS *scheduler) {
     if (!scheduler->running) {
         // Initialize cycle_ticks based on current tasks' periods
         scheduler->cycle_ticks = 0;
-        for (int i = 0; i < scheduler->max_tasks; i++) {
-            if (scheduler->task_list[i].task_id != NULL) {
-                scheduler->cycle_ticks += (scheduler->task_list[i].period_ms / scheduler->tick_ms);
-            }
-        }
-
+        STBS_CalculateTicks(scheduler);
         scheduler->running = true;
 
         // Create Zephyr thread to execute scheduler tasks
@@ -51,7 +46,9 @@ int STBS_Start(STBS *scheduler) {
                                          K_THREAD_STACK_SIZEOF(stbs_stack_area),
                                          stbs_thread_entry,
                                          scheduler, NULL, NULL,
-                                         5, 0, K_NO_WAIT);  // priority 5, no options, start immediately
+                                         0, 0, K_NO_WAIT);  // priority 0, no options, start immediately
+        
+        LOG_INF("Scheduler has started\n");
         return 0;
     }
     return -1;  // Scheduler was already running
@@ -62,6 +59,7 @@ int STBS_Stop(STBS *scheduler) {
     if (scheduler->running) {
         scheduler->running = false;
         k_thread_abort(stbs_thread_id);  // Abort the scheduler thread
+        LOG_INF("Scheduler has stopped\n");
         return 0;
     }
     return -1;  // Scheduler was not running
@@ -79,30 +77,69 @@ int Create_Task(Task *t, uint32_t period_ms, uint8_t priority, char *task_id) {
 
 // Adds a task to the scheduler
 int STBS_AddTask(STBS *scheduler, Task *t) {
+    // Stop scheduler if running
+    if (scheduler->running)
+        STBS_Stop(scheduler);
+
+    // Add task
     for (int i = 0; i < scheduler->max_tasks; i++) {
         if (scheduler->task_list[i].task_id == NULL) {
-            if ((scheduler->cycle_ticks * scheduler->tick_ms) % t->period_ms != 0) {
-                printk("Task period is not compatible with the tick rate.\n");
-                return -1;
-            }
             scheduler->task_list[i] = *t;
+            LOG_INF("Task %s added.\n",t->task_id);
             return 0;  // Successfully added
         }
     }
-    printk("No available slots for adding a new task.\n");
+
+    LOG_ERR("No available slots for adding a new task.\n");
     return -1;  // Failure
+}
+
+uint32_t STBS_CalculateTicks(STBS* scheduler) {
+    
+    uint32_t cycle_period = 0;
+
+    // Determine microcycle duration
+    for (int i = 0; i < scheduler->max_tasks; i++) {
+        Task t = scheduler->task_list[i];
+        if (t.task_id != NULL) {
+            if (i == 0) {
+                cycle_period = t.period_ms;
+                scheduler->tick_ms = t.period_ms;
+            }
+            else {
+                cycle_period = LCM(cycle_period, t.period_ms)
+                scheduler->tick_ms = GCD(scheduler->tick_ms, t.period_ms)
+            }
+        }
+    }
+    scheduler->ticks = 0;
+    scheduler->cycle_ticks = cycle_period / scheduler->tick_ms;
+
+    // Update activation ticks for each task
+    for (int i = 0; i < scheduler->max_tasks; i++) {
+        Task t = scheduler->task_list[i];
+        if (t.task_id != NULL) {
+            t.period_ticks = t.period_ms / scheduler->tick_ms;
+        }
+    }
 }
 
 // Removes a task from the scheduler
 int STBS_RemoveTask(STBS *scheduler, char *task_id) {
+    
+    // Stop scheduler if running
+    if (scheduler->running)
+        STBS_Stop(scheduler);
+
     for (int i = 0; i < scheduler->max_tasks; i++) {
         if (scheduler->task_list[i].task_id != NULL &&
             strcmp(scheduler->task_list[i].task_id, task_id) == 0) {
             scheduler->task_list[i].task_id = NULL;  // Mark slot as unused
+            LOG_INF("Task %s removed.\n",task_id);
             return 0;  // Successfully removed
         }
     }
-    printk("Task not found.\n");
+    LOG_ERR("Task not found.\n");
     return -1;  // Failure
 }
 
@@ -122,13 +159,11 @@ void stbs_thread_entry(void *scheduler_ptr, void *unused1, void *unused2) {
         for (int i = 0; i < scheduler->max_tasks; i++) {
             Task *current_task = &scheduler->task_list[i];
             if (current_task->task_id != NULL) {
-                current_task->period_ticks++;
                 // Check if the task should be activated in this cycle
-                if (current_task->period_ticks >= (current_task->period_ms / scheduler->tick_ms)) {
-                    printk("Activating task: %s (Activation %d)\n",
-                           current_task->task_id, current_task->activations + 1);
+                if (scheduler->ticks % current_task->period_ticks == 0) {
+                    LOG_INF("Activating task: %s (Activation %d)\n",
+                        current_task->task_id, current_task->activations + 1);
                     current_task->activations++;
-                    current_task->period_ticks = 0;  // Reset period_ticks for next cycle
                 }
             }
         }
@@ -139,13 +174,13 @@ void stbs_thread_entry(void *scheduler_ptr, void *unused1, void *unused2) {
 
 // Prints contents of the STBS scheduler
 void STBS_print(STBS *scheduler) {
-    printk("Scheduler State:\n");
-    printk("Tick Interval (ms): %d\n", scheduler->tick_ms);
-    printk("Number of Tasks: %d\n", scheduler->max_tasks);
-    printk("Running: %s\n", scheduler->running ? "Yes" : "No");
+    LOG_INF("Scheduler State:\n");
+    LOG_INF("Tick Interval (ms): %d\n", scheduler->tick_ms);
+    LOG_INF("Number of Tasks: %d\n", scheduler->max_tasks);
+    LOG_INF("Running: %s\n", scheduler->running ? "Yes" : "No");
     for (int i = 0; i < scheduler->max_tasks; i++) {
         if (scheduler->task_list[i].task_id != NULL) {
-            printk("Task %s: Period %d ms, Priority %d, Activations %d\n",
+            LOG_INF("Task %s: Period %d ms, Priority %d, Activations %d\n",
                    scheduler->task_list[i].task_id,
                    scheduler->task_list[i].period_ms,
                    scheduler->task_list[i].priority,
@@ -159,7 +194,7 @@ void STBS_printTask(STBS *scheduler, char *task_id) {
     for (int i = 0; i < scheduler->max_tasks; i++) {
         if (scheduler->task_list[i].task_id != NULL &&
             strcmp(scheduler->task_list[i].task_id, task_id) == 0) {
-            printk("Task %s: Period %d ms, Priority %d, Activations %d\n",
+            LOG_INF("Task %s: Period %d ms, Priority %d, Activations %d\n",
                    scheduler->task_list[i].task_id,
                    scheduler->task_list[i].period_ms,
                    scheduler->task_list[i].priority,
@@ -167,5 +202,5 @@ void STBS_printTask(STBS *scheduler, char *task_id) {
             return;
         }
     }
-    printk("Task %s not found.\n", task_id);
+    LOG_ERR("Task %s not found.\n", task_id);
 }
