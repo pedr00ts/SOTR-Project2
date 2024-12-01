@@ -5,7 +5,7 @@
 #include <string.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
-
+#include <leds.h>  // Incluir o cabeçalho para LEDs
 
 #define BUTTON0_NODE DT_ALIAS(sw0)
 #define BUTTON1_NODE DT_ALIAS(sw1)
@@ -25,7 +25,6 @@ static const struct gpio_dt_spec button0 = GPIO_DT_SPEC_GET_OR(BUTTON0_NODE, gpi
 static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET_OR(BUTTON1_NODE, gpios, {0});
 static const struct gpio_dt_spec button2 = GPIO_DT_SPEC_GET_OR(BUTTON2_NODE, gpios, {0});
 static const struct gpio_dt_spec button3 = GPIO_DT_SPEC_GET_OR(BUTTON3_NODE, gpios, {0});
-
 
 LOG_MODULE_REGISTER(button_control);
 
@@ -49,13 +48,14 @@ void stbs_thread_entry(void *scheduler_ptr, void *unused1, void *unused2);
 
 // Initializes the STBS system
 int STBS_Init(STBS *scheduler, uint32_t tick_ms, uint8_t max_tasks) {
+    leds_init();  // Inicializar os LEDs
     scheduler->tick_ms = tick_ms;
     scheduler->ticks = 0;
     scheduler->max_tasks = max_tasks;
     scheduler->task_list = (Task *)malloc(sizeof(Task) * max_tasks);
     scheduler->cycle_ticks = 0;
     scheduler->running = false;
-
+    
     if (scheduler->task_list == NULL) {
         LOG_ERR("Failed to allocate memory for tasks\n");
         return -1;  // Indicate failure
@@ -76,6 +76,8 @@ int STBS_Init(STBS *scheduler, uint32_t tick_ms, uint8_t max_tasks) {
 
     return 0;  // Success
 }
+
+// Initialize the buttons
 void buttons_init() {
     if (!device_is_ready(button0.port) ||
         !device_is_ready(button1.port) ||
@@ -95,6 +97,7 @@ void buttons_init() {
 
 // Starts the STBS scheduler
 int STBS_Start(STBS *scheduler) {
+    update_outputs();  // Atualizar os LEDs inicialmente
     if (!scheduler->running) {
         // Initialize cycle_ticks based on current tasks' periods
         scheduler->cycle_ticks = 0;
@@ -234,7 +237,7 @@ void stbs_thread_entry(void *scheduler_ptr, void *unused1, void *unused2) {
                 }
             }
         }
-        
+
         // Atualizar saídas digitais (LEDs)
         update_outputs();
 
@@ -253,7 +256,7 @@ void update_inputs() {
 
 // Função para atualizar o estado das saídas digitais (LEDs)
 void update_outputs() {
-    // Supondo que temos uma função fictícia para definir o estado dos LEDs
+    // Atualizar os LEDs com base nos valores do RTDB
     for (int i = 0; i < 4; i++) {
         set_led_state(i, rtdb.outputs[i]);  // Substituir por uma função real para definir o LED
     }
@@ -281,39 +284,6 @@ void receive_uart_message(char *buffer, size_t max_len) {
         }
     }
     buffer[i] = '\0';
-}
-
-// Prints contents of the STBS scheduler
-void STBS_print(STBS *scheduler) {
-    LOG_INF("Scheduler State:\n");
-    LOG_INF("Tick Interval (ms): %d\n", scheduler->tick_ms);
-    LOG_INF("Number of Tasks: %d\n", scheduler->max_tasks);
-    LOG_INF("Running: %s\n", scheduler->running ? "Yes" : "No");
-    for (int i = 0; i < scheduler->max_tasks; i++) {
-        if (scheduler->task_list[i].task_id != NULL) {
-            LOG_INF("Task %s: Period %d ms, Priority %d, Activations %d\n",
-                   scheduler->task_list[i].task_id,
-                   scheduler->task_list[i].period_ms,
-                   scheduler->task_list[i].priority,
-                   scheduler->task_list[i].activations);
-        }
-    }
-}
-
-// Prints information of a specific task
-void STBS_printTask(STBS *scheduler, char *task_id) {
-    for (int i = 0; i < scheduler->max_tasks; i++) {
-        if (scheduler->task_list[i].task_id != NULL &&
-            strcmp(scheduler->task_list[i].task_id, task_id) == 0) {
-            LOG_INF("Task %s: Period %d ms, Priority %d, Activations %d\n",
-                   scheduler->task_list[i].task_id,
-                   scheduler->task_list[i].period_ms,
-                   scheduler->task_list[i].priority,
-                   scheduler->task_list[i].activations);
-            return;
-        }
-    }
-    LOG_ERR("Task %s not found.\n", task_id);
 }
 
 // Utility functions
@@ -352,15 +322,4 @@ uint8_t read_button_state(int button_index) {
     }
 
     return (state == 0) ? 1 : 0;  // 1 para pressionado, 0 para não pressionado (assumindo pull-up)
-}
-
-void set_led_state(int led_index, uint8_t state) {
-    // Função fictícia para definir o estado de um LED
-    // Implementar controlo real aqui
-}
-void update_inputs() {
-    // Ler o estado dos botões e atualizar o RTDB
-    for (int i = 0; i < 4; i++) {
-        rtdb.inputs[i] = read_button_state(i);
-    }
 }
