@@ -1,1 +1,1 @@
-"mcuboot":"/home/gabriel-couto/zephyrproject/bootloader/mcuboot":"/home/gabriel-couto/zephyrproject/bootloader/mcuboot/boot/zephyr/sysbuild"
+"nrf":"/home/pedro/ncs/v2.6.1/nrf":"/home/pedro/ncs/v2.6.1/nrf/sysbuild"

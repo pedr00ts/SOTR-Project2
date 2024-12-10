@@ -6,11 +6,6 @@
 # and/or the west manifest file.
 #
 # See the Modules guide for more information.
-"DTS_ROOT":"/home/gabriel-couto/zephyrproject/modules/hal/adi"
-"DTS_ROOT":"/home/gabriel-couto/zephyrproject/modules/hal/atmel"
-"DTS_ROOT":"/home/gabriel-couto/zephyrproject/modules/hal/espressif"
-"DTS_ROOT":"/home/gabriel-couto/zephyrproject/modules/hal/gigadevice"
-"DTS_ROOT":"/home/gabriel-couto/zephyrproject/modules/hal/microchip"
-"DTS_ROOT":"/home/gabriel-couto/zephyrproject/modules/hal/nuvoton"
-"DTS_ROOT":"/home/gabriel-couto/zephyrproject/modules/hal/nxp"
-"DTS_ROOT":"/home/gabriel-couto/zephyrproject/modules/hal/stm32"
+"BOARD_ROOT":"/home/pedro/ncs/v2.6.1/nrf"
+"DTS_ROOT":"/home/pedro/ncs/v2.6.1/nrf"
+"MODULE_EXT_ROOT":"/home/pedro/ncs/v2.6.1/nrf"

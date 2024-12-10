@@ -1,5 +1,0 @@
-west:
-  command: /home/gabriel-couto/zephyrproject/.venv/bin/west build -b nrf52840dk_nrf52840
-    -p always /home/gabriel-couto/Documents/GitHub/SOTR-Project2
-  topdir: /home/gabriel-couto/zephyrproject
-  version: 1.3.0

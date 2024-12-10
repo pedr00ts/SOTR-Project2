@@ -5,43 +5,8 @@
 #include <string.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
-#include <leds.h>  // Incluir o cabeçalho para LEDs
+#include "leds.h" // Incluir o cabeçalho para LEDs
 
-#define BUTTON0_NODE DT_ALIAS(sw0)
-#define BUTTON1_NODE DT_ALIAS(sw1)
-#define BUTTON2_NODE DT_ALIAS(sw2)
-#define BUTTON3_NODE DT_ALIAS(sw3)
-
-// Verificar se o node existe no DeviceTree
-#if !DT_NODE_HAS_STATUS(BUTTON0_NODE, okay) || \
-    !DT_NODE_HAS_STATUS(BUTTON1_NODE, okay) || \
-    !DT_NODE_HAS_STATUS(BUTTON2_NODE, okay) || \
-    !DT_NODE_HAS_STATUS(BUTTON3_NODE, okay)
-#error "Unsupported board: button devicetree aliases are not defined"
-#endif
-
-// GPIO dev and pin configuration
-static const struct gpio_dt_spec button0 = GPIO_DT_SPEC_GET_OR(BUTTON0_NODE, gpios, {0});
-static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET_OR(BUTTON1_NODE, gpios, {0});
-static const struct gpio_dt_spec button2 = GPIO_DT_SPEC_GET_OR(BUTTON2_NODE, gpios, {0});
-static const struct gpio_dt_spec button3 = GPIO_DT_SPEC_GET_OR(BUTTON3_NODE, gpios, {0});
-
-LOG_MODULE_REGISTER(button_control);
-
-// UART device definition
-const struct device *uart_dev = DEVICE_DT_GET(DT_NODELABEL(uart0));
-
-// RTDB structure definition
-typedef struct {
-    uint8_t inputs[4];  // Valores dos botões
-    uint8_t outputs[4]; // Valores dos LEDs
-} RTDB;
-
-RTDB rtdb;
-
-K_THREAD_STACK_DEFINE(stbs_stack_area, 1024);
-struct k_thread stbs_thread_data;
-k_tid_t stbs_thread_id;
 
 // Forward declaration for the thread entry function
 void stbs_thread_entry(void *scheduler_ptr, void *unused1, void *unused2);
@@ -75,24 +40,6 @@ int STBS_Init(STBS *scheduler, uint32_t tick_ms, uint8_t max_tasks) {
     memset(&rtdb, 0, sizeof(RTDB));
 
     return 0;  // Success
-}
-
-// Initialize the buttons
-void buttons_init() {
-    if (!device_is_ready(button0.port) ||
-        !device_is_ready(button1.port) ||
-        !device_is_ready(button2.port) ||
-        !device_is_ready(button3.port)) {
-        LOG_ERR("GPIO device is not ready\n");
-        return;
-    }
-
-    gpio_pin_configure_dt(&button0, GPIO_INPUT | GPIO_PULL_UP);
-    gpio_pin_configure_dt(&button1, GPIO_INPUT | GPIO_PULL_UP);
-    gpio_pin_configure_dt(&button2, GPIO_INPUT | GPIO_PULL_UP);
-    gpio_pin_configure_dt(&button3, GPIO_INPUT | GPIO_PULL_UP);
-
-    LOG_INF("Buttons have been initialized successfully\n");
 }
 
 // Starts the STBS scheduler
@@ -221,6 +168,8 @@ void stbs_thread_entry(void *scheduler_ptr, void *unused1, void *unused2) {
         // Atualizar entradas digitais (botões)
         update_inputs();
 
+        // wake up threads
+
         for (int i = 0; i < scheduler->max_tasks; i++) {
             Task *current_task = &scheduler->task_list[i];
             if (current_task->task_id != NULL) {
@@ -246,6 +195,7 @@ void stbs_thread_entry(void *scheduler_ptr, void *unused1, void *unused2) {
     }
 }
 
+
 // Função para atualizar o estado das entradas digitais (botões)
 void update_inputs() {
     // Supondo que temos uma função fictícia para ler os botões
@@ -262,30 +212,6 @@ void update_outputs() {
     }
 }
 
-// UART send function
-void send_uart_message(const char *message) {
-    for (size_t i = 0; i < strlen(message); i++) {
-        uart_poll_out(uart_dev, message[i]);
-    }
-    uart_poll_out(uart_dev, '\n');
-}
-
-// UART receive function
-void receive_uart_message(char *buffer, size_t max_len) {
-    size_t i = 0;
-    int c;
-    while (i < max_len - 1) {
-        c = uart_poll_in(uart_dev, &buffer[i]);
-        if (c == 0) {  // Character successfully read
-            if (buffer[i] == '\n') {
-                break;
-            }
-            i++;
-        }
-    }
-    buffer[i] = '\0';
-}
-
 // Utility functions
 uint32_t GCD(uint32_t a, uint32_t b) {
     uint32_t aux;
@@ -299,27 +225,4 @@ uint32_t GCD(uint32_t a, uint32_t b) {
 
 uint32_t LCM(uint32_t a, uint32_t b) {
     return a * b / GCD(a, b);
-}
-
-uint8_t read_button_state(int button_index) {
-    int state = 0;
-    switch (button_index) {
-        case 0:
-            state = gpio_pin_get_dt(&button0);
-            break;
-        case 1:
-            state = gpio_pin_get_dt(&button1);
-            break;
-        case 2:
-            state = gpio_pin_get_dt(&button2);
-            break;
-        case 3:
-            state = gpio_pin_get_dt(&button3);
-            break;
-        default:
-            LOG_ERR("Invalid button index: %d\n", button_index);
-            return 0;
-    }
-
-    return (state == 0) ? 1 : 0;  // 1 para pressionado, 0 para não pressionado (assumindo pull-up)
 }
