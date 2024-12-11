@@ -3,7 +3,9 @@
 //#include <zephyr/logging/log.h>
 #include <zephyr/kernel.h>
 
-K_THREAD_STACK_DEFINE(stbs_stack_area, 1024);
+LOG_MODULE_REGISTER(STBS_C);
+
+K_THREAD_STACK_DEFINE(stbs_stack_area, STACKSIZE);
 struct k_thread stbs_thread_data;
 k_tid_t stbs_thread_id;
 

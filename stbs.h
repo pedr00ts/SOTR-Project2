@@ -6,6 +6,8 @@
 #include <zephyr/logging/log.h>
 #include <string.h>
 
+#define STACKSIZE 1024
+
 typedef struct {
     uint32_t period_ms;
     uint8_t priority;
