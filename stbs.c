@@ -20,7 +20,7 @@ int STBS_Init(STBS *scheduler, uint32_t tick_ms, uint8_t max_tasks) {
     scheduler->running = false;
     
     if (scheduler->task_list == NULL) {
-        printk("ERROR: Failed to allocate memory for tasks\n");
+        LOG_INF("ERROR: Failed to allocate memory for tasks\n");
         return -1;  // Indicate failure
     }
 
@@ -90,7 +90,7 @@ int STBS_AddTask(STBS *scheduler, Task *t) {
         }
     }
 
-    printk("ERROR: No available slots for adding a new task.\n");
+    LOG_INF("ERROR: No available slots for adding a new task.\n");
     return -1;  // Failure
 }
 
@@ -138,7 +138,7 @@ int STBS_RemoveTask(STBS *scheduler, char *task_id) {
             return 0;  // Successfully removed
         }
     }
-    printk("ERROR: Task not found.\n");
+    LOG_INF("ERROR: Task not found.\n");
     return -1;  // Failure
 }
 
@@ -200,7 +200,7 @@ void STBS_printTaskByID(STBS* scheduler, char* task_id) {
         }
     }
 
-    printk("ERROR: TASK %s IS NOT IN TASK LIST\n", task_id);
+    LOG_INF("ERROR: TASK %s IS NOT IN TASK LIST\n", task_id);
 }
 
 void STBS_print(STBS* scheduler) {
