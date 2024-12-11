@@ -1,11 +1,19 @@
 {
+  "toolchainPath": "/home/pedro/ncs/toolchains/2be090971e",
+  "sdkPath": "/home/pedro/ncs/v2.6.1",
   "board": "nrf52840dk_nrf52840",
+  "boardDirs": [
+    "/home/pedro/ncs/v2.6.1/zephyr/boards/arm/nrf52840dk_nrf52840"
+  ],
   "boardRevision": "",
   "boardDir": "/home/pedro/ncs/v2.6.1/zephyr/boards/arm/nrf52840dk_nrf52840",
   "shouldBuild": true,
   "optimizations": "none",
   "cmakeArgs": [],
-  "confFiles": [],
+  "confFiles": [
+    "prj.conf",
+    "STBS_tests/prj.conf"
+  ],
   "buildDirectory": "build",
   "kconfigFragments": [],
   "snippets": [],

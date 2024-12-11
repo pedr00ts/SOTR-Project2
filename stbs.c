@@ -1,19 +1,17 @@
 #include "stbs.h"
-#include "uart_comm.h"  // Incluir as funções UART
-#include <zephyr/drivers/uart.h>
-#include <zephyr/sys/printk.h>
 #include <string.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/logging/log.h>
-#include "leds.h" // Incluir o cabeçalho para LEDs
+//#include <zephyr/logging/log.h>
+#include <zephyr/kernel.h>
 
+K_THREAD_STACK_DEFINE(stbs_stack_area, 1024);
+struct k_thread stbs_thread_data;
+k_tid_t stbs_thread_id;
 
 // Forward declaration for the thread entry function
 void stbs_thread_entry(void *scheduler_ptr, void *unused1, void *unused2);
 
 // Initializes the STBS system
 int STBS_Init(STBS *scheduler, uint32_t tick_ms, uint8_t max_tasks) {
-    leds_init();  // Inicializar os LEDs
     scheduler->tick_ms = tick_ms;
     scheduler->ticks = 0;
     scheduler->max_tasks = max_tasks;
@@ -22,7 +20,7 @@ int STBS_Init(STBS *scheduler, uint32_t tick_ms, uint8_t max_tasks) {
     scheduler->running = false;
     
     if (scheduler->task_list == NULL) {
-        LOG_ERR("Failed to allocate memory for tasks\n");
+        printk("ERROR: Failed to allocate memory for tasks\n");
         return -1;  // Indicate failure
     }
 
@@ -31,20 +29,11 @@ int STBS_Init(STBS *scheduler, uint32_t tick_ms, uint8_t max_tasks) {
         scheduler->task_list[i].task_id = NULL;
     }
 
-    if (!device_is_ready(uart_dev)) {
-        LOG_ERR("UART device not ready\n");
-        return -1;
-    }
-
-    // Initialize RTDB
-    memset(&rtdb, 0, sizeof(RTDB));
-
     return 0;  // Success
 }
 
 // Starts the STBS scheduler
 int STBS_Start(STBS *scheduler) {
-    update_outputs();  // Atualizar os LEDs inicialmente
     if (!scheduler->running) {
         // Initialize cycle_ticks based on current tasks' periods
         scheduler->cycle_ticks = 0;
@@ -76,12 +65,13 @@ int STBS_Stop(STBS *scheduler) {
 }
 
 // Create a task
-int Create_Task(Task *t, uint32_t period_ms, uint8_t priority, char *task_id) {
+int Create_Task(Task *t, uint32_t period_ms, uint8_t priority, char *task_id, k_tid_t tid) {
     t->period_ms = period_ms;
     t->priority = priority;
     t->period_ticks = 0;
     t->activations = 0;
     t->task_id = task_id;
+    t->tid = tid;
     return 0;  // Success
 }
 
@@ -100,7 +90,7 @@ int STBS_AddTask(STBS *scheduler, Task *t) {
         }
     }
 
-    LOG_ERR("No available slots for adding a new task.\n");
+    printk("ERROR: No available slots for adding a new task.\n");
     return -1;  // Failure
 }
 
@@ -148,7 +138,7 @@ int STBS_RemoveTask(STBS *scheduler, char *task_id) {
             return 0;  // Successfully removed
         }
     }
-    LOG_ERR("Task not found.\n");
+    printk("ERROR: Task not found.\n");
     return -1;  // Failure
 }
 
@@ -165,11 +155,8 @@ void stbs_thread_entry(void *scheduler_ptr, void *unused1, void *unused2) {
     STBS *scheduler = (STBS *)scheduler_ptr;
 
     while (scheduler->running) {
-        // Atualizar entradas digitais (botões)
-        update_inputs();
 
         // wake up threads
-
         for (int i = 0; i < scheduler->max_tasks; i++) {
             Task *current_task = &scheduler->task_list[i];
             if (current_task->task_id != NULL) {
@@ -178,39 +165,16 @@ void stbs_thread_entry(void *scheduler_ptr, void *unused1, void *unused2) {
                     LOG_INF("Activating task: %s (Activation %d)\n",
                             current_task->task_id, current_task->activations + 1);
                     current_task->activations++;
-
-                    // Construir o frame UART para informar sobre a ativação da tarefa
-                    char frame[50];
-                    build_uart_frame(frame, 'M', 'A', current_task->task_id);
-                    send_uart_message(frame);
+                    k_wakeup(current_task->tid);
                 }
             }
         }
-
-        // Atualizar saídas digitais (LEDs)
-        update_outputs();
 
         // Wait until next tick period
         STBS_WaitPeriod(scheduler);
     }
 }
 
-
-// Função para atualizar o estado das entradas digitais (botões)
-void update_inputs() {
-    // Supondo que temos uma função fictícia para ler os botões
-    for (int i = 0; i < 4; i++) {
-        rtdb.inputs[i] = read_button_state(i);  // Substituir por uma função real de leitura
-    }
-}
-
-// Função para atualizar o estado das saídas digitais (LEDs)
-void update_outputs() {
-    // Atualizar os LEDs com base nos valores do RTDB
-    for (int i = 0; i < 4; i++) {
-        set_led_state(i, rtdb.outputs[i]);  // Substituir por uma função real para definir o LED
-    }
-}
 
 // Utility functions
 uint32_t GCD(uint32_t a, uint32_t b) {
@@ -225,4 +189,44 @@ uint32_t GCD(uint32_t a, uint32_t b) {
 
 uint32_t LCM(uint32_t a, uint32_t b) {
     return a * b / GCD(a, b);
+}
+
+void STBS_printTaskByID(STBS* scheduler, char* task_id) {
+    for (int i = 0; i < scheduler->max_tasks; i++) {
+        Task t = scheduler->task_list[i];
+        if (strcmp(t.task_id, task_id) == 0) {
+            STBS_printTask(&scheduler->task_list[i]);
+            return;
+        }
+    }
+
+    printk("ERROR: TASK %s IS NOT IN TASK LIST\n", task_id);
+}
+
+void STBS_print(STBS* scheduler) {
+    // Print scheduler info
+    LOG_INF("SCHEDULER INFO:\n");
+    LOG_INF("MICROCYCLE DURATION: %d ms\n", scheduler->tick_ms);
+    LOG_INF("TOTAL TICKS: %d\n", scheduler->ticks);
+    LOG_INF("MAX TASKS: %d\n", scheduler->max_tasks);
+    LOG_INF("TICKS PER MACROCYCLE: %d\n", scheduler->cycle_ticks);
+
+    // Print tasks
+    LOG_INF("\nTASK LIST:\n");
+    for (int i = 0; i < scheduler->max_tasks; i++) {
+        Task t = scheduler->task_list[i];
+        if (t.task_id == NULL)
+            return;
+
+        LOG_INF("\n");
+        STBS_printTask(&scheduler->task_list[i]);
+    }
+}
+
+void STBS_printTask(Task* t) {
+    LOG_INF("TASK %s:\n", t->task_id);
+    LOG_INF("PERIOD = %d ms\n", t->period_ms);
+    LOG_INF("PRIORITY = %d\n", t->priority);
+    LOG_INF("TICKS PER ACTIVATION = %d\n", t->period_ticks);
+    LOG_INF("NUMBER OF ACTIVATIONS = %d\n", t->activations);
 }
