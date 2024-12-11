@@ -44,11 +44,3 @@ void set_led_state(int led_index, uint8_t state) {
             LOG_ERR("Invalid LED index: %d\n", led_index);
     }
 }
-
-// Atualizar os LEDs com base no RTDB
-void update_outputs(void) {
-    // Atualiza cada LED com o valor armazenado no RTDB
-    for (int i = 0; i < 4; i++) {
-        set_led_state(i, rtdb.outputs[i]);
-    }
-}

@@ -140,7 +140,7 @@ int STBS_RemoveTask(STBS *scheduler, char *task_id) {
             return 0;  // Successfully removed
         }
     }
-    LOG_INF("ERROR: Task not found.\n");
+    LOG_ERR("ERROR: Task not found.\n");
     return -1;  // Failure
 }
 
@@ -202,7 +202,7 @@ void STBS_printTaskByID(STBS* scheduler, char* task_id) {
         }
     }
 
-    LOG_INF("ERROR: TASK %s IS NOT IN TASK LIST\n", task_id);
+    LOG_ERR("ERROR: TASK %s IS NOT IN TASK LIST\n", task_id);
 }
 
 void STBS_print(STBS* scheduler) {

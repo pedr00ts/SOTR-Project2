@@ -11,7 +11,6 @@
   "optimizations": "none",
   "cmakeArgs": [],
   "confFiles": [
-    "prj.conf",
     "STBS_tests/prj.conf"
   ],
   "buildDirectory": "build",
